@@ -3,3 +3,18 @@
 .env.*
 *.env
 !.env.example
+# Data files — too large for git, contain processed regulatory data
+data/raw/
+data/processed/
+data/chromadb/
+data/mappings/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
