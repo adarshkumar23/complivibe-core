@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from collections import Counter
 from dataclasses import asdict, dataclass, fields, replace
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Optional
 
@@ -108,10 +110,24 @@ class ObligationExtractor:
                 )
                 return response.text
             except Exception as e:
-                if attempt < 2:
-                    time.sleep(10)
-                else:
-                    raise e
+                error_text = str(e)
+                status_code = getattr(e, "status_code", None)
+                if status_code in (429, 503) or "429" in error_text or "503" in error_text:
+                    wait_seconds = None
+                    if "retrydelay" in error_text.lower() or "retry in" in error_text.lower():
+                        match = re.search(r"retry in (\d+\.?\d*)s", error_text, re.IGNORECASE)
+                        if match:
+                            wait_seconds = float(match.group(1)) + 2
+
+                    if wait_seconds is None:
+                        wait_seconds = [15, 30, 60][attempt]
+
+                    print(f"⏳ Rate limited — waiting {wait_seconds}s before retry {attempt + 1}/3")
+                    if attempt < 2:
+                        time.sleep(wait_seconds)
+                        continue
+
+                raise e
 
     def extract_by_article(self, regulation: str, regulation_display: str, article: str, chunks: list[RegulationChunk]) -> list[Obligation]:
         batch_text = "\n\n".join(c.text for c in chunks)
@@ -142,7 +158,19 @@ class ObligationExtractor:
             if not isinstance(payload, list):
                 raise ValueError("LLM did not return a JSON array")
         except Exception as exc:
-            print(f"✗ obligation extraction failed for {regulation} Article {article}: {exc}")
+            failed_path = config.processed_data_dir / "failed_extractions.jsonl"
+            failed_path.parent.mkdir(parents=True, exist_ok=True)
+            raw_response = locals().get("text", "")
+            record = {
+                "article": article,
+                "regulation": regulation,
+                "raw_response": raw_response,
+                "error": str(exc),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+            with failed_path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(record, ensure_ascii=True) + "\n")
+            print(f"✗ JSON parse failed for {regulation} Article {article} — logged to failed_extractions.jsonl")
             return []
 
         obligations: list[Obligation] = []
