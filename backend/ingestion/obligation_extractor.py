@@ -4,7 +4,7 @@ import json
 import os
 import time
 from collections import Counter
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, fields, replace
 from pathlib import Path
 from typing import Iterable, Optional
 
@@ -14,7 +14,7 @@ from backend.core.config import config
 from backend.ingestion.chunker import RegulationChunk
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class Obligation:
     obligation_id: str
     regulation: str
@@ -23,6 +23,7 @@ class Obligation:
     chapter: Optional[str]
     obligation_type: str
     who_must_comply: str
+    who_must_comply_original: Optional[str] = None
     what_must_be_done: str
     legal_basis: str
     applies_to_risk_tier: Optional[str]
@@ -36,9 +37,11 @@ class Obligation:
     def to_dict(self) -> dict:
         return asdict(self)
 
-    @staticmethod
-    def from_dict(payload: dict) -> "Obligation":
-        return Obligation(**payload)
+    @classmethod
+    def from_dict(cls, data: dict):
+        payload = dict(data)
+        filtered = {field.name: payload.pop(field.name) for field in fields(cls) if field.name in payload}
+        return cls(**filtered)
 
 
 def save_obligations(obligations: Iterable[Obligation], regulation_key: str) -> Path:
