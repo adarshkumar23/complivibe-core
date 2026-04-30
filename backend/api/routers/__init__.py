@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from backend.api.routers import classify, company, mappings, obligations, score, search
+from backend.api.routers import classify, company, documents, mappings, obligations, score, search
 
 
 api_router = APIRouter()
@@ -10,3 +10,4 @@ api_router.include_router(obligations.router, tags=["obligations"])
 api_router.include_router(mappings.router, tags=["mappings"])
 api_router.include_router(search.router, tags=["search"])
 api_router.include_router(score.router, tags=["score"])
+api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
